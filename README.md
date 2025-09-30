@@ -37,7 +37,37 @@ You can get your Perplexity API key from [Perplexity AI](https://www.perplexity.
 
 ### MCP Client Configuration
 
-Add the server to your MCP client configuration (e.g., Claude Desktop):
+#### For Cursor IDE
+
+1. Copy the example configuration file:
+
+   ```bash
+   cp .cursor/mcp.json.example .cursor/mcp.json
+   ```
+
+2. Edit `.cursor/mcp.json` and update:
+   - The absolute path to your `dist/index.js` file
+   - Your Perplexity API key
+
+The configuration file should look like:
+
+```json
+{
+  "mcpServers": {
+    "perplexity": {
+      "command": "node",
+      "args": ["/absolute/path/to/perplexity-mcp-server/dist/index.js"],
+      "env": {
+        "PERPLEXITY_API_KEY": "your-perplexity-api-key-here"
+      }
+    }
+  }
+}
+```
+
+3. Restart Cursor IDE to load the MCP server
+
+#### For Claude Desktop
 
 **MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
@@ -53,7 +83,7 @@ Add the server to your MCP client configuration (e.g., Claude Desktop):
 }
 ```
 
-**Note:** Replace `/absolute/path/to/perplexity-mcp-server` with the actual path where you've installed this server. The `PERPLEXITY_API_KEY` should be set in your `.env` file (see Environment Variables section above).
+**Note:** For Claude Desktop, set your `PERPLEXITY_API_KEY` in the `.env` file. For Cursor, you can set it directly in the `mcp.json` file.
 
 ## Available Tools
 
@@ -81,7 +111,13 @@ Ask questions and get AI-powered answers with real-time web search from Perplexi
 }
 ```
 
-**Model:** Uses Perplexity's `sonar-pro` model by default, which provides enhanced accuracy and comprehensive responses with citations.
+**Configuration:**
+
+- **Model:** `sonar-pro` (Perplexity's premier model)
+- **Search Mode:** `web` (general web search)
+- **Streaming:** Enabled for faster response delivery
+
+**Response Format:** Responses include the AI-generated answer followed by a "Sources" section with clickable citations to the web pages used to generate the response.
 
 ## Usage
 

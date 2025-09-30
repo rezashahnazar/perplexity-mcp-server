@@ -10,7 +10,9 @@ import {
 import dotenv from "dotenv";
 import { PerplexityChatParams, PerplexityChatResponse } from "./types.js";
 
-// Load environment variables
+// Load environment variables from .env file (if not already set by MCP client)
+// Note: dotenv.config() does NOT override existing environment variables,
+// so API keys set via mcp.json will take precedence
 dotenv.config();
 
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
@@ -101,7 +103,9 @@ class PerplexityMCPServer {
           content: args.content,
         },
       ],
-      return_citations: true,
+      search_mode: "web",
+      return_related_questions: false,
+      stream: true,
     };
 
     const response = await this.callChatAPI(chatParams);
@@ -109,11 +113,25 @@ class PerplexityMCPServer {
     const content =
       response.choices[0]?.message?.content || "No response generated";
 
+    // Format response with citations if available
+    let formattedResponse = content;
+
+    if (response.search_results && response.search_results.length > 0) {
+      formattedResponse += "\n\n**Sources:**\n";
+      response.search_results.forEach((result, index) => {
+        formattedResponse += `${index + 1}. [${result.title}](${result.url})`;
+        if (result.date) {
+          formattedResponse += ` (${result.date})`;
+        }
+        formattedResponse += "\n";
+      });
+    }
+
     return {
       content: [
         {
           type: "text",
-          text: content,
+          text: formattedResponse,
         },
       ],
     };
@@ -138,7 +156,82 @@ class PerplexityMCPServer {
       );
     }
 
+    // Handle streaming response
+    if (params.stream && response.body) {
+      return await this.handleStreamResponse(response);
+    }
+
     return await response.json();
+  }
+
+  private async handleStreamResponse(
+    response: Response
+  ): Promise<PerplexityChatResponse> {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedContent = "";
+    let lastChunk: any = null;
+    let searchResults: any[] | null = null;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              lastChunk = parsed;
+
+              // Accumulate content from delta
+              if (parsed.choices?.[0]?.delta?.content) {
+                accumulatedContent += parsed.choices[0].delta.content;
+              }
+
+              // Capture search results if present
+              if (parsed.search_results) {
+                searchResults = parsed.search_results;
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Construct a complete response object
+    return {
+      id: lastChunk?.id || "unknown",
+      model: lastChunk?.model || "sonar-pro",
+      object: "chat.completion",
+      created: lastChunk?.created || Date.now(),
+      choices: [
+        {
+          index: 0,
+          finish_reason: lastChunk?.choices?.[0]?.finish_reason || "stop",
+          message: {
+            role: "assistant",
+            content: accumulatedContent,
+          },
+        },
+      ],
+      usage: lastChunk?.usage || {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+      search_results: searchResults,
+    };
   }
 
   private setupErrorHandling(): void {
