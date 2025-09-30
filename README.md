@@ -1,186 +1,457 @@
 # Perplexity MCP Server
 
-A Model Context Protocol (MCP) server that integrates Perplexity AI's chat capabilities into your MCP-compatible applications.
+A production-ready Model Context Protocol (MCP) server that integrates Perplexity AI's powerful search capabilities. Get real-time AI-powered answers with web sources and citations through the StreamableHTTP transport.
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org/)
+[![MCP](https://img.shields.io/badge/MCP-1.0-purple)](https://modelcontextprotocol.io/)
 
 ## Overview
 
-This MCP server provides access to Perplexity AI's powerful online LLMs with real-time web search capabilities, allowing you to ask questions and get AI-generated responses with up-to-date information.
+This MCP server provides seamless integration with Perplexity AI's chat API, enabling AI applications to access current web information through the Model Context Protocol. Built with TypeScript, Express, and the MCP SDK StreamableHTTP transport for efficient, scalable communication.
 
 ## Features
 
-- **Real-time Web Search**: Access current information from the web
-- **AI-Powered Responses**: Get intelligent, contextual answers powered by Perplexity's Sonar Pro model
-- **Streaming Architecture**: Streams responses from Perplexity API for efficient processing, returns complete response to MCP client
-- **Clean Responses**: Concise answers without citations or references
-- **Simple Interface**: Easy-to-use chat tool with minimal configuration
+- ✅ **StreamableHTTP Transport** - Modern HTTP-based MCP server with SSE support
+- ✅ **Real-time Web Search** - Powered by Perplexity's Sonar Pro model
+- ✅ **Rich Responses** - AI-generated answers with citations and related images
+- ✅ **Flexible Authentication** - Supports Authorization header and environment variables
+- ✅ **Production Ready** - Express-based with proper error handling and session management
+- ✅ **Universal Compatibility** - Works with any MCP client supporting StreamableHTTP
 
-## Installation
+## Quick Start
+
+### Installation
 
 ```bash
+# Clone or navigate to the project directory
+cd perplexity-mcp-server
+
 # Install dependencies
 pnpm install
 
 # Build the project
-pnpm run build
+pnpm build
 ```
 
-## Configuration
+### Running the Server
 
-### API Key Setup
-
-The API key is validated at runtime when the tool is called, not at server startup. This allows the server to start successfully and receive the API key from the MCP client.
-
-**For MCP Clients (Cursor, Claude Desktop):**
-The API key is provided through the MCP client configuration (see below). No `.env` file is needed.
-
-**For Local Testing (optional):**
-If you want to test the server directly with `pnpm start`, create a `.env` file:
-
-```env
-PERPLEXITY_API_KEY=your_api_key_here
+```bash
+# Start the server
+pnpm start
 ```
 
-You can get your Perplexity API key from [Perplexity AI](https://www.perplexity.ai/).
+The server will start on `http://127.0.0.1:3001/mcp`
 
-### MCP Client Configuration
+### Get Your API Key
 
-#### For Cursor IDE
+Sign up and get your Perplexity API key from [https://www.perplexity.ai/](https://www.perplexity.ai/)
 
-1. Create a `.cursor/mcp.json` file in the project root (or use the provided `mcp.json.example` as a template):
+## Client Configuration
 
-   ```bash
-   mkdir -p .cursor
-   cp mcp.json.example .cursor/mcp.json
-   ```
+This server works with **any MCP client** that supports the StreamableHTTP transport. Below are configuration examples for popular clients.
 
-2. Edit `.cursor/mcp.json` and update:
-   - The absolute path to your `dist/index.js` file
-   - Your Perplexity API key
+### Cursor IDE
 
-The configuration file should look like:
+Cursor IDE supports HTTP-based MCP servers with header authentication.
+
+**Step 1: Start the server**
+
+```bash
+pnpm build
+pnpm start
+```
+
+**Step 2: Configure Cursor**
+
+Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-specific):
 
 ```json
 {
   "mcpServers": {
     "perplexity": {
-      "command": "node",
-      "args": ["/absolute/path/to/perplexity-mcp-server/dist/index.js"],
-      "env": {
-        "PERPLEXITY_API_KEY": "your-perplexity-api-key-here"
+      "url": "http://127.0.0.1:3001/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_PERPLEXITY_API_KEY"
       }
     }
   }
 }
 ```
 
-3. Restart Cursor IDE to load the MCP server
+**Step 3: Restart Cursor**
 
-#### For Claude Desktop
+The `perplexity_search` tool will now be available.
 
-**MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+### Claude Desktop
+
+Claude Desktop is another popular MCP client.
+
+**Configuration:**
 
 ```json
 {
   "mcpServers": {
     "perplexity": {
-      "command": "node",
-      "args": ["/absolute/path/to/perplexity-mcp-server/dist/index.js"],
-      "env": {
-        "PERPLEXITY_API_KEY": "your-perplexity-api-key-here"
+      "url": "http://127.0.0.1:3001/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_PERPLEXITY_API_KEY"
       }
     }
   }
 }
 ```
 
-**Note:** Replace `/absolute/path/to/perplexity-mcp-server` with the actual path and add your Perplexity API key.
+> **Note:** The server must be running before connecting.
+
+### Other MCP Clients
+
+Any MCP client supporting StreamableHTTP can connect using:
+
+- **Server URL**: `http://127.0.0.1:3001/mcp`
+- **Authentication**: `Authorization: Bearer YOUR_PERPLEXITY_API_KEY` header
+- **Transport**: StreamableHTTP (SSE-based)
+
+Refer to your MCP client's documentation for specific configuration steps.
+
+### MCP SDK Integration
+
+For direct SDK usage:
+
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+const client = new Client(
+  {
+    name: "my-client",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {},
+  }
+);
+
+const transport = new StreamableHTTPClientTransport(
+  new URL("http://127.0.0.1:3001/mcp"),
+  {
+    headers: {
+      Authorization: "Bearer YOUR_API_KEY",
+    },
+  }
+);
+
+await client.connect(transport);
+
+const result = await client.callTool({
+  name: "perplexity_search",
+  arguments: {
+    query: "What are the latest developments in quantum computing?",
+  },
+});
+
+console.log(result);
+```
 
 ## Available Tools
 
-### `search_chat`
+### `perplexity_search`
 
-Ask questions and get AI-powered answers with real-time web search from Perplexity AI. This tool searches the web for current information and provides intelligent, contextual responses.
-
-**When to use:**
-
-- Current events and news
-- Research questions requiring up-to-date information
-- Factual queries that need authoritative sources
-- Technical documentation lookups
-- Any information requiring recent or verified web sources
+Search and get AI-powered answers with real-time web data, citations, and images.
 
 **Parameters:**
 
-- `content` (string, required): The question or query to ask Perplexity AI
+- `query` (string, required): Your search query or question
 
 **Example:**
 
 ```json
 {
-  "content": "What are the latest developments in AI?"
+  "query": "What are the latest developments in AI agents?"
 }
 ```
 
-**Configuration:**
+**Response includes:**
 
-- **Model:** `sonar-pro` (Perplexity's premier advanced search model)
-- **Search Mode:** `web` (general web search)
-- **Max Tokens:** 4000 (maximum response length)
-- **Temperature:** 0.2 (focused and deterministic responses)
-- **Top P:** 0.9 (nucleus sampling for quality)
-- **Top K:** 0 (disabled)
-- **Frequency Penalty:** 1.0 (reduces repetition)
-- **Presence Penalty:** 0 (neutral)
-- **Streaming:** Enabled (streams from Perplexity API, returns complete response to client)
-- **Return Images:** Disabled
-- **Related Questions:** Disabled
-- **Citations:** Not included in response (clean answer only)
+- AI-generated answer based on current web data
+- **Sources**: Citations with URLs
+- **Related Images**: Relevant images with titles and URLs
 
-## Usage
+**Model Configuration:**
 
-Once configured, the `search_chat` tool will be available in your MCP-compatible application. Use it to:
+- Model: `sonar-pro` (Perplexity's premier advanced search model)
+- Search Recency: `month` (configurable)
+- Streaming: Enabled (from Perplexity API, processed server-side)
+- Citations: Included
+- Images: Included when relevant
 
-- Ask questions about current events and get up-to-date information
-- Get AI-generated responses powered by real-time web search
-- Research topics with access to current web data
+## Configuration
+
+### Environment Variables
+
+- `PERPLEXITY_API_KEY`: Your Perplexity API key (optional if using Authorization header)
+- `PORT`: Server port (default: 3001)
+
+### API Key Priority
+
+The server accepts API keys from two sources with the following priority:
+
+1. **Authorization Header** (Recommended)
+
+   - Format: `Authorization: Bearer YOUR_API_KEY`
+   - Sent per-request via HTTP headers
+   - More secure for multi-user scenarios
+
+2. **Environment Variable** (Fallback)
+   - Set `PERPLEXITY_API_KEY` when starting the server
+   - Shared across all requests
+
+### Usage Examples
+
+**With environment variable:**
+
+```bash
+PERPLEXITY_API_KEY=pplx-abc123 PORT=8080 pnpm start
+```
+
+**With header authentication:**
+
+```bash
+pnpm start
+# Client sends: Authorization: Bearer pplx-abc123
+```
 
 ## Development
 
+### Build
+
 ```bash
-# Install dependencies
-pnpm install
-
-# Build the project
-pnpm run build
-
-# Watch mode for development
-pnpm run dev
-
-# Test with MCP Inspector
-pnpm run inspect
+pnpm build
 ```
 
-## API Documentation
+### Development Mode (with auto-reload)
 
-This server is built using the following Perplexity AI APIs:
+```bash
+pnpm dev
+```
 
-- **Chat API Documentation**: [https://docs.perplexity.ai/getting-started/quickstart](https://docs.perplexity.ai/getting-started/quickstart)
+### Watch TypeScript Compilation
+
+```bash
+pnpm watch
+```
+
+### Test with MCP Inspector
+
+```bash
+pnpm inspector
+```
+
+### Health Check
+
+Verify the server is running:
+
+```bash
+curl http://127.0.0.1:3001/health
+```
+
+Expected response:
+
+```json
+{ "status": "ok", "service": "perplexity-mcp-server" }
+```
+
+## Architecture
+
+### StreamableHTTP Transport
+
+This server uses the MCP StreamableHTTP transport providing:
+
+- **HTTP/HTTPS** - Standard protocols for web communication
+- **Server-Sent Events (SSE)** - Real-time server-to-client messages
+- **Session Management** - Stateful sessions with UUID-based IDs
+- **Scalability** - Multiple concurrent connections
+- **Infrastructure Compatibility** - Works with proxies, load balancers, and CDNs
+
+### Request Flow
+
+1. Client sends HTTP POST to `/mcp` endpoint
+2. Express extracts Authorization header → API key
+3. Request forwarded to MCP transport
+4. Tool handler receives request with API key
+5. Server calls Perplexity API with streaming
+6. Response parsed and formatted with citations/images
+7. Complete response returned via MCP protocol
+
+### Technology Stack
+
+- **Runtime**: Node.js 18+
+- **Language**: TypeScript 5.3+
+- **Framework**: Express 5
+- **MCP SDK**: @modelcontextprotocol/sdk
+- **HTTP Client**: node-fetch 3
+- **Validation**: Zod 3
+
+## Production Deployment
+
+### Security Best Practices
+
+1. **API Key Security**
+
+   - Use environment variables or secure vaults
+   - Never commit API keys to version control
+   - Rotate keys regularly
+
+2. **Network Security**
+
+   - Server binds to `127.0.0.1` (localhost) by default
+   - Use reverse proxy (nginx, Caddy) with SSL/TLS for production
+   - Configure firewall rules appropriately
+
+3. **Input Validation**
+
+   - All inputs validated with Zod schemas
+   - Query length limits enforced
+
+4. **Rate Limiting**
+   - Consider adding rate limiting middleware
+   - Monitor Perplexity API usage
+
+### Reverse Proxy Example (nginx)
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name mcp.yourdomain.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location /mcp {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Process Management (PM2)
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start server
+pm2 start dist/server.js --name perplexity-mcp
+
+# With environment variables
+pm2 start dist/server.js --name perplexity-mcp \
+  --env PERPLEXITY_API_KEY=your-key \
+  --env PORT=3001
+
+# Save process list
+pm2 save
+
+# Setup startup script
+pm2 startup
+```
+
+### Docker Deployment
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+COPY . .
+RUN pnpm build
+
+EXPOSE 3001
+
+CMD ["node", "dist/server.js"]
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Error: "PERPLEXITY_API_KEY is required"**
+
+- Ensure API key is provided via Authorization header or environment variable
+- Check header format: `Authorization: Bearer YOUR_KEY`
+- Verify the server receives the header (check logs)
+
+**Connection Refused**
+
+- Verify server is running: `curl http://127.0.0.1:3001/health`
+- Check port matches configuration
+- Ensure no firewall is blocking the port
+
+**Citations or Images showing as "Untitled" or broken links**
+
+- This should be fixed in the latest version
+- Rebuild: `pnpm build && pnpm start`
+- Verify you're running the latest code
+
+**Cursor IDE not finding server**
+
+- Ensure server is running before starting Cursor
+- Check `~/.cursor/mcp.json` syntax is valid JSON
+- Restart Cursor after configuration changes
+- Check Cursor's MCP panel for connection status
+
+## API Reference
+
+### Perplexity API
+
+- **Documentation**: [https://docs.perplexity.ai/](https://docs.perplexity.ai/)
 - **API Reference**: [https://docs.perplexity.ai/api-reference/chat-completions](https://docs.perplexity.ai/api-reference/chat-completions)
+- **Model Cards**: [https://docs.perplexity.ai/guides/model-cards](https://docs.perplexity.ai/guides/model-cards)
 
-For more information about Perplexity AI's capabilities, visit:
+### Model Context Protocol
 
-- **Perplexity Documentation**: [https://docs.perplexity.ai/](https://docs.perplexity.ai/)
+- **MCP Docs**: [https://modelcontextprotocol.io/](https://modelcontextprotocol.io/)
+- **Specification**: [https://spec.modelcontextprotocol.io/](https://spec.modelcontextprotocol.io/)
+- **TypeScript SDK**: [https://github.com/modelcontextprotocol/typescript-sdk](https://github.com/modelcontextprotocol/typescript-sdk)
 
-## Model Context Protocol
+## Project Structure
 
-This server implements the Model Context Protocol (MCP), which enables seamless integration between AI applications and external tools/data sources.
+```
+perplexity-mcp-server/
+├── src/
+│   └── server.ts          # Main server implementation
+├── dist/                  # Compiled JavaScript output
+├── package.json          # Dependencies and scripts
+├── tsconfig.json         # TypeScript configuration
+├── mcp.json.example     # Example MCP client config
+└── README.md            # This file
+```
 
-Learn more about MCP:
+## Contributing
 
-- **MCP Documentation**: [https://modelcontextprotocol.io/](https://modelcontextprotocol.io/)
-- **MCP Specification**: [https://spec.modelcontextprotocol.io/](https://spec.modelcontextprotocol.io/)
+Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
 
 MIT
+
+## Acknowledgments
+
+Built with:
+
+- [Model Context Protocol](https://modelcontextprotocol.io/) by Anthropic
+- [Perplexity AI](https://www.perplexity.ai/)
+- [Express](https://expressjs.com/)
+- [TypeScript](https://www.typescriptlang.org/)
+
+---
+
+**Made with ❤️ using the Model Context Protocol**
