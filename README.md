@@ -4,13 +4,13 @@ A Model Context Protocol (MCP) server that integrates Perplexity AI's chat capab
 
 ## Overview
 
-This MCP server provides access to Perplexity AI's powerful online LLMs with real-time web search capabilities, allowing you to ask questions and get AI-generated responses with up-to-date information and citations.
+This MCP server provides access to Perplexity AI's powerful online LLMs with real-time web search capabilities, allowing you to ask questions and get AI-generated responses with up-to-date information.
 
 ## Features
 
 - **Real-time Web Search**: Access current information from the web
 - **AI-Powered Responses**: Get intelligent, contextual answers powered by Perplexity's Sonar Pro model
-- **Citations**: Responses include citations to source materials
+- **Clean Responses**: Concise answers without citations or references
 - **Simple Interface**: Easy-to-use chat tool with minimal configuration
 
 ## Installation
@@ -124,8 +124,8 @@ Ask questions and get AI-powered answers with real-time web search from Perplexi
 Once configured, the `search_chat` tool will be available in your MCP-compatible application. Use it to:
 
 - Ask questions about current events and get up-to-date information
-- Get AI-generated responses with citations from reliable sources
-- Research topics with access to real-time web data
+- Get AI-generated responses powered by real-time web search
+- Research topics with access to current web data
 
 ## Development
 
