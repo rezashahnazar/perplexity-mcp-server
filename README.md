@@ -87,7 +87,7 @@ The configuration file should look like:
 
 ## Available Tools
 
-### `perplexity_search_chat`
+### `search_chat`
 
 Ask questions and get AI-powered answers with real-time web search from Perplexity AI. This tool searches the web for current information and provides intelligent, contextual responses with citations.
 
@@ -121,7 +121,7 @@ Ask questions and get AI-powered answers with real-time web search from Perplexi
 
 ## Usage
 
-Once configured, the `perplexity_search_chat` tool will be available in your MCP-compatible application. Use it to:
+Once configured, the `search_chat` tool will be available in your MCP-compatible application. Use it to:
 
 - Ask questions about current events and get up-to-date information
 - Get AI-generated responses with citations from reliable sources

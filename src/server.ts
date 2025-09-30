@@ -49,7 +49,7 @@ class PerplexityMCPServer {
       return {
         tools: [
           {
-            name: "perplexity_search_chat",
+            name: "search_chat",
             description:
               "Ask questions and get AI-powered answers with real-time web search from Perplexity AI. Use this when you need current information, facts, research, news, or any query that benefits from up-to-date web sources. Responses include citations to original sources. Best for: current events, research questions, factual queries, technical documentation lookups, and any information that requires recent or authoritative web sources.",
             inputSchema: {
@@ -73,7 +73,7 @@ class PerplexityMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
-        if (name === "perplexity_search_chat") {
+        if (name === "search_chat") {
           return await this.handlePerplexityChat(args);
         } else {
           throw new Error(`Unknown tool: ${name}`);
