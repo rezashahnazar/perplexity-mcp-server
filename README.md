@@ -9,17 +9,13 @@ This MCP server provides access to Perplexity AI's powerful online LLMs with rea
 ## Features
 
 - **Real-time Web Search**: Access current information from the web
-- **AI-Powered Responses**: Get intelligent, contextual answers powered by Perplexity's Sonar model
+- **AI-Powered Responses**: Get intelligent, contextual answers powered by Perplexity's Sonar Pro model
 - **Citations**: Responses include citations to source materials
 - **Simple Interface**: Easy-to-use chat tool with minimal configuration
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd perplexity-mcp-server
-
 # Install dependencies
 pnpm install
 
@@ -43,7 +39,7 @@ You can get your Perplexity API key from [Perplexity AI](https://www.perplexity.
 
 Add the server to your MCP client configuration (e.g., Claude Desktop):
 
-**MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ```json
@@ -51,14 +47,13 @@ Add the server to your MCP client configuration (e.g., Claude Desktop):
   "mcpServers": {
     "perplexity": {
       "command": "node",
-      "args": ["/absolute/path/to/perplexity-mcp-server/dist/index.js"],
-      "env": {
-        "PERPLEXITY_API_KEY": "your_api_key_here"
-      }
+      "args": ["/absolute/path/to/perplexity-mcp-server/dist/index.js"]
     }
   }
 }
 ```
+
+**Note:** Replace `/absolute/path/to/perplexity-mcp-server` with the actual path where you've installed this server. The `PERPLEXITY_API_KEY` should be set in your `.env` file (see Environment Variables section above).
 
 ## Available Tools
 
@@ -90,11 +85,11 @@ Ask questions and get AI-powered answers with real-time web search from Perplexi
 
 ## Usage
 
-Once configured, you can use the Perplexity chat tool in your MCP-compatible application:
+Once configured, the `perplexity_search_chat` tool will be available in your MCP-compatible application. Use it to:
 
-1. Ask questions about current events and get up-to-date information
-2. Get AI-generated responses with citations
-3. Access Perplexity's Sonar model for intelligent answers
+- Ask questions about current events and get up-to-date information
+- Get AI-generated responses with citations from reliable sources
+- Research topics with access to real-time web data
 
 ## Development
 
@@ -105,8 +100,11 @@ pnpm install
 # Build the project
 pnpm run build
 
-# Run in development mode (with watch)
-pnpm run watch
+# Watch mode for development
+pnpm run dev
+
+# Test with MCP Inspector
+pnpm run inspect
 ```
 
 ## API Documentation
@@ -132,7 +130,3 @@ Learn more about MCP:
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
