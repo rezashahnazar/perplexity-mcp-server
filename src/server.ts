@@ -8,6 +8,10 @@ import { z } from "zod";
 import fetch, { Response } from "node-fetch";
 import express from "express";
 import { randomUUID } from "crypto";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Validation schema for the search query
 const SearchQuerySchema = z.object({
@@ -284,7 +288,49 @@ class PerplexityMCPServer {
     });
   }
 
+  private async checkPortInUse(port: number): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync(`lsof -ti:${port}`);
+      return stdout.trim().length > 0;
+    } catch (error) {
+      // lsof returns non-zero exit code if port is not in use
+      return false;
+    }
+  }
+
+  private async getProcessUsingPort(port: number): Promise<string | null> {
+    try {
+      const { stdout } = await execAsync(`lsof -ti:${port}`);
+      const pid = stdout.trim();
+      if (pid) {
+        const { stdout: processInfo } = await execAsync(
+          `ps -p ${pid} -o command=`
+        );
+        return `PID ${pid}: ${processInfo.trim()}`;
+      }
+    } catch (error) {
+      // Ignore errors
+    }
+    return null;
+  }
+
   async start(port: number = 3001): Promise<void> {
+    // Check if port is already in use
+    const portInUse = await this.checkPortInUse(port);
+    if (portInUse) {
+      const processInfo = await this.getProcessUsingPort(port);
+      console.error(`\n❌ ERROR: Port ${port} is already in use!`);
+      if (processInfo) {
+        console.error(`   Process: ${processInfo}`);
+      }
+      console.error(`\n💡 To fix this, you can:`);
+      console.error(`   1. Stop the existing server (Ctrl+C in its terminal)`);
+      console.error(`   2. Use a different port: PORT=3002 pnpm start`);
+      console.error(`   3. Kill the process: kill -9 $(lsof -ti:${port})`);
+      console.error(`   4. Find and stop it: lsof -ti:${port} | xargs ps -p\n`);
+      process.exit(1);
+    }
+
     const app = express();
     app.use(express.json());
 
@@ -324,21 +370,30 @@ class PerplexityMCPServer {
     });
 
     // Start the HTTP server
-    const httpServer = app.listen(port, "127.0.0.1", () => {
-      console.log(
-        `Starting Perplexity MCP server on http://127.0.0.1:${port}/mcp`
-      );
-      console.log("Perplexity MCP server is running!");
-    });
-
-    // Handle graceful shutdown
-    process.on("SIGTERM", async () => {
-      console.log("SIGTERM received, shutting down gracefully...");
-      httpServer.close(() => {
-        console.log("HTTP server closed");
+    return new Promise<void>((resolve) => {
+      const httpServer = app.listen(port, "127.0.0.1", () => {
+        console.log(
+          `Starting Perplexity MCP server on http://127.0.0.1:${port}/mcp`
+        );
+        console.log("Perplexity MCP server is running!");
+        resolve();
       });
-      await this.server.close();
-      process.exit(0);
+
+      // Keep the server alive
+      httpServer.on("error", (error) => {
+        console.error("HTTP server error:", error);
+        process.exit(1);
+      });
+
+      // Handle graceful shutdown
+      process.on("SIGTERM", async () => {
+        console.log("SIGTERM received, shutting down gracefully...");
+        httpServer.close(() => {
+          console.log("HTTP server closed");
+        });
+        await this.server.close();
+        process.exit(0);
+      });
     });
   }
 }

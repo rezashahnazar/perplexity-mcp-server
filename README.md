@@ -16,10 +16,17 @@ This MCP server provides seamless integration with Perplexity AI's chat API, ena
 - ✅ **Real-time Web Search** - Powered by Perplexity's Sonar Pro model
 - ✅ **Rich Responses** - AI-generated answers with citations and related images
 - ✅ **Flexible Authentication** - Supports Authorization header and environment variables
+- ✅ **Smart Port Management** - Automatic port conflict detection with helpful error messages
 - ✅ **Production Ready** - Express-based with proper error handling and session management
-- ✅ **Universal Compatibility** - Works with any MCP client supporting StreamableHTTP
+- ✅ **Universal Compatibility** - Works with any MCP client supporting StreamableHTTP or Stdio
 
 ## Quick Start
+
+### Prerequisites
+
+- **Node.js** 18+ 
+- **pnpm** package manager
+- **Perplexity API Key** from [perplexity.ai](https://www.perplexity.ai/)
 
 ### Installation
 
@@ -36,12 +43,19 @@ pnpm build
 
 ### Running the Server
 
+**For HTTP Transport:**
+
 ```bash
-# Start the server
+# Build and start
+pnpm build
 pnpm start
 ```
 
 The server will start on `http://127.0.0.1:3001/mcp`
+
+**For Stdio Transport:**
+
+No manual start needed - the MCP client launches it automatically. Just configure your client and restart it.
 
 ### Get Your API Key
 
@@ -51,12 +65,16 @@ Sign up and get your Perplexity API key from [https://www.perplexity.ai/](https:
 
 This server provides **two transport options**:
 
-1. **Stdio Transport** - Auto-starts with MCP client (recommended for simplicity)
-2. **HTTP Transport** - Runs as standalone server (recommended for production)
+| Transport | Use Case | Pros | When to Use |
+|-----------|----------|------|-------------|
+| **Stdio** | Development, Single Client | ✅ Auto-starts<br>✅ No port conflicts<br>✅ Simple setup | Cursor IDE, Claude Desktop (single user) |
+| **HTTP** | Production, Multiple Clients | ✅ Serves multiple clients<br>✅ Stays running<br>✅ Better for servers | Production deployments, shared environments |
 
-### Option 1: Stdio Transport (Auto-Start)
+### Option 1: Stdio Transport (Auto-Start) ⭐ Recommended
 
 The client launches the server automatically. **No manual server start required.**
+
+**Best for:** Cursor IDE, Claude Desktop, single-user development
 
 #### Cursor IDE (Stdio)
 
@@ -96,9 +114,11 @@ Same configuration format:
 }
 ```
 
-### Option 2: HTTP Transport (Standalone Server)
+### Option 2: HTTP Transport (Standalone Server) 🚀 Production
 
 Server runs independently and can serve multiple clients.
+
+**Best for:** Production deployments, shared environments, multiple concurrent clients
 
 **Step 1: Start the server**
 
@@ -460,12 +480,34 @@ CMD ["node", "dist/server.js"]
 - Rebuild: `pnpm build && pnpm start`
 - Verify you're running the latest code
 
-**Cursor IDE not finding server**
+**Error: "Port 3001 is already in use"**
 
-- Ensure server is running before starting Cursor
+The server automatically detects port conflicts and provides helpful solutions:
+
+```
+❌ ERROR: Port 3001 is already in use!
+   Process: PID 12345: node dist/server.js
+
+💡 To fix this, you can:
+   1. Stop the existing server (Ctrl+C in its terminal)
+   2. Use a different port: PORT=3002 pnpm start
+   3. Kill the process: kill -9 $(lsof -ti:3001)
+   4. Find and stop it: lsof -ti:3001 | xargs ps -p
+```
+
+**Cursor IDE not finding server (HTTP)**
+
+- Ensure server is running **before** starting Cursor: `pnpm start`
 - Check `~/.cursor/mcp.json` syntax is valid JSON
-- Restart Cursor after configuration changes
+- Fully restart Cursor (Cmd+Q / Ctrl+Q, then relaunch)
+- Verify server is running: `curl http://127.0.0.1:3001/health`
 - Check Cursor's MCP panel for connection status
+
+**Cursor IDE - Stdio vs HTTP**
+
+- **Stdio (Recommended)**: Auto-starts, no manual server needed
+- **HTTP**: Requires `pnpm start` running in a separate terminal
+- If HTTP not connecting, try Stdio instead for simplicity
 
 ## API Reference
 
@@ -517,3 +559,9 @@ Built with:
 ---
 
 **Made with ❤️ using the Model Context Protocol**
+
+## Support
+
+- 📖 [Documentation](https://modelcontextprotocol.io/)
+- 🐛 [Report Issues](https://github.com/your-repo/issues)
+- 🌟 Star this repo if you find it useful!
