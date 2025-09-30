@@ -89,7 +89,7 @@ The configuration file should look like:
 
 ### `search_chat`
 
-Ask questions and get AI-powered answers with real-time web search from Perplexity AI. This tool searches the web for current information and provides intelligent, contextual responses with citations.
+Ask questions and get AI-powered answers with real-time web search from Perplexity AI. This tool searches the web for current information and provides intelligent, contextual responses.
 
 **When to use:**
 
@@ -115,9 +115,9 @@ Ask questions and get AI-powered answers with real-time web search from Perplexi
 
 - **Model:** `sonar-pro` (Perplexity's premier model)
 - **Search Mode:** `web` (general web search)
-- **Streaming:** Enabled for faster response delivery
-
-**Response Format:** Responses include the AI-generated answer followed by a "Sources" section with clickable citations to the web pages used to generate the response.
+- **Streaming:** Disabled (returns complete responses)
+- **Related Questions:** Disabled
+- **Citations:** Not included in response (clean answer only)
 
 ## Usage
 

@@ -105,7 +105,7 @@ class PerplexityMCPServer {
       ],
       search_mode: "web",
       return_related_questions: false,
-      stream: true,
+      stream: false,
     };
 
     const response = await this.callChatAPI(chatParams);
@@ -113,25 +113,11 @@ class PerplexityMCPServer {
     const content =
       response.choices[0]?.message?.content || "No response generated";
 
-    // Format response with citations if available
-    let formattedResponse = content;
-
-    if (response.search_results && response.search_results.length > 0) {
-      formattedResponse += "\n\n**Sources:**\n";
-      response.search_results.forEach((result, index) => {
-        formattedResponse += `${index + 1}. [${result.title}](${result.url})`;
-        if (result.date) {
-          formattedResponse += ` (${result.date})`;
-        }
-        formattedResponse += "\n";
-      });
-    }
-
     return {
       content: [
         {
           type: "text",
-          text: formattedResponse,
+          text: content,
         },
       ],
     };
