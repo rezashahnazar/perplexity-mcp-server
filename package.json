@@ -12,8 +12,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "start": "tsx src/server.ts",
-    "start:stdio": "tsx src/stdio.ts",
+    "start": "node dist/server.js",
+    "start:stdio": "node dist/stdio.js",
     "dev": "tsx watch src/server.ts",
     "dev:stdio": "tsx watch src/stdio.ts",
     "watch": "tsc --watch",
