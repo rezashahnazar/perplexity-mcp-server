@@ -113,9 +113,16 @@ Ask questions and get AI-powered answers with real-time web search from Perplexi
 
 **Configuration:**
 
-- **Model:** `sonar-pro` (Perplexity's premier model)
+- **Model:** `sonar-pro` (Perplexity's premier advanced search model)
 - **Search Mode:** `web` (general web search)
-- **Streaming:** Disabled (returns complete responses)
+- **Max Tokens:** 4000 (maximum response length)
+- **Temperature:** 0.2 (focused and deterministic responses)
+- **Top P:** 0.9 (nucleus sampling for quality)
+- **Top K:** 0 (disabled)
+- **Frequency Penalty:** 1.0 (reduces repetition)
+- **Presence Penalty:** 0 (neutral)
+- **Streaming:** Enabled (faster response delivery)
+- **Return Images:** Disabled
 - **Related Questions:** Disabled
 - **Citations:** Not included in response (clean answer only)
 

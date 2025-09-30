@@ -103,9 +103,21 @@ class PerplexityMCPServer {
           content: args.content,
         },
       ],
+      // Search configuration
       search_mode: "web",
+      return_images: false,
       return_related_questions: false,
-      stream: false,
+
+      // Response configuration
+      max_tokens: 4000,
+      temperature: 0.2,
+      top_p: 0.9,
+      top_k: 0,
+
+      // Streaming and penalties
+      stream: true,
+      presence_penalty: 0,
+      frequency_penalty: 1.0,
     };
 
     const response = await this.callChatAPI(chatParams);
