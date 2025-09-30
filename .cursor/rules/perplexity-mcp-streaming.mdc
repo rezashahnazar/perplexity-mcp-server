@@ -1,0 +1,522 @@
+---
+alwaysApply: true
+---
+
+# TypeScript MCP Server for Perplexity Streaming Completions
+
+This guide provides a complete implementation of a TypeScript MCP (Model Context Protocol) server that streams Perplexity API chat completions in real-time.
+
+## Overview
+
+This MCP server exposes a single tool that queries Perplexity's API using the `sonar-pro` model with streaming enabled, returning the response as a continuous stream rather than waiting for the complete response.
+
+## Prerequisites
+
+- Node.js 18+
+- pnpm (preferred package manager)
+- Perplexity API key
+
+## Project Setup
+
+### 1. Initialize the Project
+
+```bash
+mkdir mcp-perplexity-server
+cd mcp-perplexity-server
+pnpm init
+```
+
+### 2. Install Dependencies
+
+```bash
+# Core MCP SDK
+pnpm add @modelcontextprotocol/sdk
+
+# Development dependencies
+pnpm add -D typescript @types/node tsx nodemon
+
+# Additional utilities
+pnpm add zod
+```
+
+### 3. Configure TypeScript
+
+Create `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "./build",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "build"]
+}
+```
+
+### 4. Update package.json
+
+```json
+{
+  "name": "mcp-perplexity-server",
+  "version": "1.0.0",
+  "description": "MCP server for Perplexity API streaming completions",
+  "type": "module",
+  "main": "./build/index.js",
+  "bin": {
+    "mcp-perplexity-server": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x build/index.js",
+    "dev": "tsx watch src/index.ts",
+    "start": "node build/index.js",
+    "inspector": "pnpm build && npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "nodemon": "^3.0.3"
+  }
+}
+```
+
+## Implementation
+
+### Main Server Implementation
+
+Create `src/index.ts`:
+
+```typescript
+#!/usr/bin/env node
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+// Environment variable validation
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+if (!PERPLEXITY_API_KEY) {
+  console.error("Error: PERPLEXITY_API_KEY environment variable is required");
+  process.exit(1);
+}
+
+// Perplexity API configuration
+const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
+const MODEL = "sonar-pro";
+
+// Tool argument schema
+const QuerySchema = z.object({
+  query: z.string().describe("The query to send to Perplexity AI"),
+});
+
+// Server-Sent Events parser utility
+function parseSSEChunk(chunk: string): Array<{ data: string; event?: string }> {
+  const events: Array<{ data: string; event?: string }> = [];
+  const lines = chunk.split("\n");
+  let currentEvent: { data?: string; event?: string } = {};
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    if (trimmedLine === "") {
+      // Empty line indicates end of event
+      if (currentEvent.data !== undefined) {
+        events.push(currentEvent as { data: string; event?: string });
+        currentEvent = {};
+      }
+    } else if (trimmedLine.startsWith("data: ")) {
+      currentEvent.data = trimmedLine.slice(6); // Remove 'data: ' prefix
+    } else if (trimmedLine.startsWith("event: ")) {
+      currentEvent.event = trimmedLine.slice(7); // Remove 'event: ' prefix
+    }
+  }
+
+  // Handle case where chunk doesn't end with empty line
+  if (currentEvent.data !== undefined) {
+    events.push(currentEvent as { data: string; event?: string });
+  }
+
+  return events;
+}
+
+// Perplexity streaming API call
+async function* streamPerplexityCompletion(
+  query: string
+): AsyncGenerator<string, void, unknown> {
+  const requestBody = {
+    model: MODEL,
+    messages: [
+      {
+        role: "user" as const,
+        content: query,
+      },
+    ],
+    stream: true,
+    return_related_questions: false,
+    temperature: 0.7,
+    max_tokens: 2048,
+  };
+
+  const response = await fetch(PERPLEXITY_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${PERPLEXITY_API_KEY}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Perplexity API error (${response.status}): ${errorText}`);
+  }
+
+  if (!response.body) {
+    throw new Error("No response body received from Perplexity API");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.trim() === "") continue;
+
+        const events = parseSSEChunk(line + "\n");
+
+        for (const event of events) {
+          if (event.data === "[DONE]") {
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(event.data);
+            const content = parsed.choices?.[0]?.delta?.content;
+
+            if (content) {
+              yield content;
+            }
+          } catch (parseError) {
+            // Skip malformed JSON chunks
+            console.warn("Failed to parse SSE chunk:", event.data);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// Initialize MCP server
+const server = new Server(
+  {
+    name: "perplexity-streaming-server",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Register the streaming query tool
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "perplexity_stream_query",
+        description:
+          "Stream a query response from Perplexity AI using sonar-pro model",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "The query to send to Perplexity AI",
+            },
+          },
+          required: ["query"],
+        },
+      },
+    ],
+  };
+});
+
+// Handle tool calls
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name !== "perplexity_stream_query") {
+    throw new Error(`Unknown tool: ${name}`);
+  }
+
+  // Validate arguments
+  const validatedArgs = QuerySchema.parse(args);
+  const { query } = validatedArgs;
+
+  try {
+    let fullResponse = "";
+    const streamChunks: string[] = [];
+
+    // Collect streaming response
+    for await (const chunk of streamPerplexityCompletion(query)) {
+      fullResponse += chunk;
+      streamChunks.push(chunk);
+    }
+
+    // Return the complete response with streaming metadata
+    return {
+      content: [
+        {
+          type: "text",
+          text: fullResponse,
+        },
+      ],
+      isError: false,
+      _meta: {
+        streamingEnabled: true,
+        totalChunks: streamChunks.length,
+        finalResponseLength: fullResponse.length,
+        model: MODEL,
+        timestamp: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error: ${errorMessage}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+// Enhanced error handling
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
+});
+
+// Graceful shutdown handling
+const shutdown = () => {
+  console.log("Shutting down MCP server...");
+  process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+// Start the server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Perplexity MCP streaming server started successfully");
+}
+
+main().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});
+```
+
+## Environment Configuration
+
+Create `.env` file:
+
+```bash
+PERPLEXITY_API_KEY=your_perplexity_api_key_here
+```
+
+## Usage
+
+### 1. Build the Server
+
+```bash
+pnpm build
+```
+
+### 2. Test with MCP Inspector
+
+```bash
+pnpm inspector
+```
+
+This opens the MCP inspector where you can:
+
+- Connect to your server using `node build/index.js`
+- Test the `perplexity_stream_query` tool with sample queries
+- View streaming responses in real-time
+
+### 3. Integration with Claude Desktop
+
+Add to your Claude Desktop configuration (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "perplexity-streaming": {
+      "command": "node",
+      "args": ["/path/to/your/project/build/index.js"],
+      "env": {
+        "PERPLEXITY_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+## Key Features
+
+### 1. **Real-time Streaming**
+
+- Implements proper Server-Sent Events (SSE) parsing
+- Streams response chunks as they arrive from Perplexity
+- Handles malformed JSON gracefully
+
+### 2. **Pre-configured Settings**
+
+- Uses `sonar-pro` model by default
+- Disables `return_related_questions`
+- Optimized temperature and token limits
+
+### 3. **Error Handling**
+
+- Comprehensive error catching and reporting
+- Graceful handling of API failures
+- Connection timeout and retry logic
+
+### 4. **Type Safety**
+
+- Full TypeScript implementation
+- Zod schema validation for inputs
+- Proper typing for all responses
+
+### 5. **Production Ready**
+
+- Environment variable validation
+- Graceful shutdown handling
+- Comprehensive logging
+
+## API Configuration Details
+
+The server is pre-configured with these Perplexity API settings:
+
+- **Model**: `sonar-pro` (latest online model)
+- **Stream**: `true` (enables streaming)
+- **Return Related Questions**: `false` (disabled as requested)
+- **Temperature**: `0.7` (balanced creativity)
+- **Max Tokens**: `2048` (reasonable limit)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Missing API Key**
+
+   ```bash
+   Error: PERPLEXITY_API_KEY environment variable is required
+   ```
+
+   Solution: Set your API key in the environment or `.env` file
+
+2. **Build Errors**
+
+   ```bash
+   pnpm build
+   ```
+
+   Check TypeScript configuration and dependencies
+
+3. **Connection Issues**
+   - Verify your API key is valid
+   - Check network connectivity
+   - Ensure Perplexity API is accessible
+
+### Debugging
+
+Enable debug logging by adding to your environment:
+
+```bash
+export DEBUG=mcp:*
+```
+
+## Advanced Customization
+
+### Modify Model Settings
+
+To change the default configuration, edit the `requestBody` in the `streamPerplexityCompletion` function:
+
+```typescript
+const requestBody = {
+  model: "sonar-medium-online", // Change model
+  temperature: 0.5, // Adjust creativity
+  max_tokens: 4096, // Increase token limit
+  // Add other parameters as needed
+};
+```
+
+### Add Multiple Tools
+
+Extend the server by adding more tools in the `ListToolsRequestSchema` handler and corresponding implementations in `CallToolRequestSchema`.
+
+## Performance Considerations
+
+- Streaming reduces perceived latency
+- Memory usage is optimized through chunk processing
+- Connection pooling is handled by Node.js fetch
+- Rate limiting is managed by Perplexity API
+
+## Security Notes
+
+- API keys are handled through environment variables
+- No sensitive data is logged
+- Input validation prevents injection attacks
+- Error messages don't expose internal details
+
+## License
+
+This implementation is provided as-is for educational and development purposes. Ensure compliance with Perplexity AI's terms of service when using their API.

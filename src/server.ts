@@ -8,20 +8,13 @@ import {
   CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import dotenv from "dotenv";
-import { PerplexityChatParams, PerplexityChatResponse } from "./types.js";
 
 // Load environment variables from .env file (if not already set by MCP client)
 // Note: dotenv.config() does NOT override existing environment variables,
 // so API keys set via mcp.json will take precedence
 dotenv.config();
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const PERPLEXITY_API_BASE = "https://api.perplexity.ai";
-
-if (!PERPLEXITY_API_KEY) {
-  console.error("PERPLEXITY_API_KEY environment variable is required");
-  process.exit(1);
-}
 
 class PerplexityMCPServer {
   private server: Server;
@@ -95,110 +88,167 @@ class PerplexityMCPServer {
   }
 
   private async handlePerplexityChat(args: any): Promise<CallToolResult> {
-    const chatParams: PerplexityChatParams = {
+    try {
+      // Validate API key at runtime (not at startup)
+      const apiKey = process.env.PERPLEXITY_API_KEY;
+      if (!apiKey) {
+        throw new Error(
+          "PERPLEXITY_API_KEY environment variable is required. Please set it in your MCP client configuration."
+        );
+      }
+
+      let fullResponse = "";
+      const streamChunks: string[] = [];
+
+      // Collect streaming response
+      for await (const chunk of this.streamPerplexityCompletion(
+        args.content,
+        apiKey
+      )) {
+        fullResponse += chunk;
+        streamChunks.push(chunk);
+      }
+
+      // Return the complete response
+      return {
+        content: [
+          {
+            type: "text",
+            text: fullResponse,
+          },
+        ],
+        isError: false,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${errorMessage}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  // Server-Sent Events parser utility
+  private parseSSEChunk(
+    chunk: string
+  ): Array<{ data: string; event?: string }> {
+    const events: Array<{ data: string; event?: string }> = [];
+    const lines = chunk.split("\n");
+    let currentEvent: { data?: string; event?: string } = {};
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+
+      if (trimmedLine === "") {
+        // Empty line indicates end of event
+        if (currentEvent.data !== undefined) {
+          events.push(currentEvent as { data: string; event?: string });
+          currentEvent = {};
+        }
+      } else if (trimmedLine.startsWith("data: ")) {
+        currentEvent.data = trimmedLine.slice(6); // Remove 'data: ' prefix
+      } else if (trimmedLine.startsWith("event: ")) {
+        currentEvent.event = trimmedLine.slice(7); // Remove 'event: ' prefix
+      }
+    }
+
+    // Handle case where chunk doesn't end with empty line
+    if (currentEvent.data !== undefined) {
+      events.push(currentEvent as { data: string; event?: string });
+    }
+
+    return events;
+  }
+
+  // Perplexity streaming API call
+  private async *streamPerplexityCompletion(
+    query: string,
+    apiKey: string
+  ): AsyncGenerator<string, void, unknown> {
+    const requestBody = {
       model: "sonar-pro",
       messages: [
         {
-          role: "user",
-          content: args.content,
+          role: "user" as const,
+          content: query,
         },
       ],
-      // Search configuration
+      stream: true,
       search_mode: "web",
       return_images: false,
       return_related_questions: false,
-
-      // Response configuration
       max_tokens: 4000,
       temperature: 0.2,
       top_p: 0.9,
       top_k: 0,
-
-      // Streaming and penalties
-      stream: true,
       presence_penalty: 0,
       frequency_penalty: 1.0,
     };
 
-    const response = await this.callChatAPI(chatParams);
-
-    const content =
-      response.choices[0]?.message?.content || "No response generated";
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: content,
-        },
-      ],
-    };
-  }
-
-  private async callChatAPI(
-    params: PerplexityChatParams
-  ): Promise<PerplexityChatResponse> {
     const response = await fetch(`${PERPLEXITY_API_BASE}/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${PERPLEXITY_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        Accept: "text/event-stream",
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
-        `Perplexity Chat API error (${response.status}): ${errorText}`
+        `Perplexity API error (${response.status}): ${errorText}`
       );
     }
 
-    // Handle streaming response
-    if (params.stream && response.body) {
-      return await this.handleStreamResponse(response);
+    if (!response.body) {
+      throw new Error("No response body received from Perplexity API");
     }
 
-    return await response.json();
-  }
-
-  private async handleStreamResponse(
-    response: Response
-  ): Promise<PerplexityChatResponse> {
-    const reader = response.body!.getReader();
+    const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let accumulatedContent = "";
-    let lastChunk: any = null;
-    let searchResults: any[] | null = null;
+    let buffer = "";
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (data === "[DONE]") continue;
+          if (line.trim() === "") continue;
+
+          const events = this.parseSSEChunk(line + "\n");
+
+          for (const event of events) {
+            if (event.data === "[DONE]") {
+              return;
+            }
 
             try {
-              const parsed = JSON.parse(data);
-              lastChunk = parsed;
+              const parsed = JSON.parse(event.data);
+              const content = parsed.choices?.[0]?.delta?.content;
 
-              // Accumulate content from delta
-              if (parsed.choices?.[0]?.delta?.content) {
-                accumulatedContent += parsed.choices[0].delta.content;
+              if (content) {
+                yield content;
               }
-
-              // Capture search results if present
-              if (parsed.search_results) {
-                searchResults = parsed.search_results;
-              }
-            } catch (e) {
-              // Skip invalid JSON lines
+            } catch (parseError) {
+              // Skip malformed JSON chunks
+              console.warn("Failed to parse SSE chunk:", event.data);
             }
           }
         }
@@ -206,30 +256,6 @@ class PerplexityMCPServer {
     } finally {
       reader.releaseLock();
     }
-
-    // Construct a complete response object
-    return {
-      id: lastChunk?.id || "unknown",
-      model: lastChunk?.model || "sonar-pro",
-      object: "chat.completion",
-      created: lastChunk?.created || Date.now(),
-      choices: [
-        {
-          index: 0,
-          finish_reason: lastChunk?.choices?.[0]?.finish_reason || "stop",
-          message: {
-            role: "assistant",
-            content: accumulatedContent,
-          },
-        },
-      ],
-      usage: lastChunk?.usage || {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-      },
-      search_results: searchResults,
-    };
   }
 
   private setupErrorHandling(): void {
