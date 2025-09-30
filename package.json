@@ -4,7 +4,8 @@
   "description": "MCP Server for Perplexity AI Search Integration with StreamableHTTP",
   "type": "module",
   "bin": {
-    "perplexity-mcp-server": "./dist/server.js"
+    "perplexity-mcp-server": "./dist/stdio.js",
+    "perplexity-mcp-http": "./dist/server.js"
   },
   "files": [
     "dist"
@@ -12,9 +13,12 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/server.ts",
+    "start:stdio": "tsx src/stdio.ts",
     "dev": "tsx watch src/server.ts",
+    "dev:stdio": "tsx watch src/stdio.ts",
     "watch": "tsc --watch",
-    "inspector": "npx @modelcontextprotocol/inspector dist/server.js"
+    "inspector": "npx @modelcontextprotocol/inspector dist/server.js",
+    "inspector:stdio": "npx @modelcontextprotocol/inspector dist/stdio.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.3",

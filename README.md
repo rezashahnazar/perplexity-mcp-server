@@ -12,7 +12,7 @@ This MCP server provides seamless integration with Perplexity AI's chat API, ena
 
 ## Features
 
-- ✅ **StreamableHTTP Transport** - Modern HTTP-based MCP server with SSE support
+- ✅ **Dual Transport Support** - Both Stdio (auto-start) and HTTP (standalone) transports
 - ✅ **Real-time Web Search** - Powered by Perplexity's Sonar Pro model
 - ✅ **Rich Responses** - AI-generated answers with citations and related images
 - ✅ **Flexible Authentication** - Supports Authorization header and environment variables
@@ -49,11 +49,56 @@ Sign up and get your Perplexity API key from [https://www.perplexity.ai/](https:
 
 ## Client Configuration
 
-This server works with **any MCP client** that supports the StreamableHTTP transport. Below are configuration examples for popular clients.
+This server provides **two transport options**:
 
-### Cursor IDE
+1. **Stdio Transport** - Auto-starts with MCP client (recommended for simplicity)
+2. **HTTP Transport** - Runs as standalone server (recommended for production)
 
-Cursor IDE supports HTTP-based MCP servers with header authentication.
+### Option 1: Stdio Transport (Auto-Start)
+
+The client launches the server automatically. **No manual server start required.**
+
+#### Cursor IDE (Stdio)
+
+Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-specific):
+
+```json
+{
+  "mcpServers": {
+    "perplexity": {
+      "command": "node",
+      "args": ["/absolute/path/to/perplexity-mcp-server/dist/stdio.js"],
+      "env": {
+        "PERPLEXITY_API_KEY": "YOUR_PERPLEXITY_API_KEY"
+      }
+    }
+  }
+}
+```
+
+**Note:** Replace `/absolute/path/to/perplexity-mcp-server` with your actual project path.
+
+#### Claude Desktop (Stdio)
+
+Same configuration format:
+
+```json
+{
+  "mcpServers": {
+    "perplexity": {
+      "command": "node",
+      "args": ["/absolute/path/to/perplexity-mcp-server/dist/stdio.js"],
+      "env": {
+        "PERPLEXITY_API_KEY": "YOUR_PERPLEXITY_API_KEY"
+      }
+    }
+  }
+}
+```
+
+### Option 2: HTTP Transport (Standalone Server)
+
+Server runs independently and can serve multiple clients.
 
 **Step 1: Start the server**
 
@@ -83,11 +128,9 @@ Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project-spec
 
 The `perplexity_search` tool will now be available.
 
-### Claude Desktop
+#### Claude Desktop (HTTP)
 
-Claude Desktop is another popular MCP client.
-
-**Configuration:**
+Same configuration format:
 
 ```json
 {
@@ -231,8 +274,16 @@ pnpm build
 
 ### Development Mode (with auto-reload)
 
+**HTTP Server:**
+
 ```bash
 pnpm dev
+```
+
+**Stdio Server:**
+
+```bash
+pnpm dev:stdio
 ```
 
 ### Watch TypeScript Compilation
@@ -243,8 +294,16 @@ pnpm watch
 
 ### Test with MCP Inspector
 
+**HTTP Server:**
+
 ```bash
 pnpm inspector
+```
+
+**Stdio Server:**
+
+```bash
+pnpm inspector:stdio
 ```
 
 ### Health Check
@@ -427,8 +486,11 @@ CMD ["node", "dist/server.js"]
 ```
 perplexity-mcp-server/
 ├── src/
-│   └── server.ts          # Main server implementation
+│   ├── server.ts          # HTTP transport server (StreamableHTTP)
+│   └── stdio.ts           # Stdio transport server (auto-start)
 ├── dist/                  # Compiled JavaScript output
+│   ├── server.js          # HTTP server executable
+│   └── stdio.js           # Stdio server executable
 ├── package.json          # Dependencies and scripts
 ├── tsconfig.json         # TypeScript configuration
 ├── mcp.json.example     # Example MCP client config
